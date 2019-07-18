@@ -441,9 +441,9 @@ typedef struct
 struct TrgmPackedGraph
 {
 	/*
-	 * colorTrigramsCount and colorTrigramsGroups contain information about
-	 * how trigrams are grouped into color trigrams.  "colorTrigramsCount" is
-	 * the count of color trigrams and "colorTrigramGroups" contains number of
+	 * colorTrigramsCount and colorTrigramGroups contain information about how
+	 * trigrams are grouped into color trigrams.  "colorTrigramsCount" is the
+	 * count of color trigrams and "colorTrigramGroups" contains number of
 	 * simple trigrams for each color trigram.  The array of simple trigrams
 	 * (stored separately from this struct) is ordered so that the simple
 	 * trigrams for each color trigram are consecutive, and they're in order
@@ -1013,9 +1013,7 @@ addKey(TrgmNFA *trgmNFA, TrgmState *state, TrgmStateKey *key)
 {
 	regex_arc_t *arcs;
 	TrgmStateKey destKey;
-	ListCell   *cell,
-			   *prev,
-			   *next;
+	ListCell   *cell;
 	int			i,
 				arcsCount;
 
@@ -1030,13 +1028,10 @@ addKey(TrgmNFA *trgmNFA, TrgmState *state, TrgmStateKey *key)
 	 * redundancy.  We can drop either old key(s) or the new key if we find
 	 * redundancy.
 	 */
-	prev = NULL;
-	cell = list_head(state->enterKeys);
-	while (cell)
+	foreach(cell, state->enterKeys)
 	{
 		TrgmStateKey *existingKey = (TrgmStateKey *) lfirst(cell);
 
-		next = lnext(cell);
 		if (existingKey->nstate == key->nstate)
 		{
 			if (prefixContains(&existingKey->prefix, &key->prefix))
@@ -1050,15 +1045,10 @@ addKey(TrgmNFA *trgmNFA, TrgmState *state, TrgmStateKey *key)
 				 * The new key covers this old key. Remove the old key, it's
 				 * no longer needed once we add this key to the list.
 				 */
-				state->enterKeys = list_delete_cell(state->enterKeys,
-													cell, prev);
+				state->enterKeys = foreach_delete_current(state->enterKeys,
+														  cell);
 			}
-			else
-				prev = cell;
 		}
-		else
-			prev = cell;
-		cell = next;
 	}
 
 	/* No redundancy, so add this key to the state's list */

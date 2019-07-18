@@ -72,7 +72,7 @@ static pg_time_t last_progress_report = 0;
 static void
 usage(void)
 {
-	printf(_("%s enables, disables or verifies data checksums in a PostgreSQL database cluster.\n\n"), progname);
+	printf(_("%s enables, disables, or verifies data checksums in a PostgreSQL database cluster.\n\n"), progname);
 	printf(_("Usage:\n"));
 	printf(_("  %s [OPTION]... [DATADIR]\n"), progname);
 	printf(_("\nOptions:\n"));
@@ -235,7 +235,7 @@ scan_file(const char *fn, BlockNumber segmentno)
 			/* Write block with checksum */
 			if (write(f, buf.data, BLCKSZ) != BLCKSZ)
 			{
-				pg_log_error("could not update checksum of block %u in file \"%s\": %m",
+				pg_log_error("could not write block %u in file \"%s\": %m",
 							 blockno, fn);
 				exit(1);
 			}
@@ -469,7 +469,7 @@ main(int argc, char *argv[])
 	/* filenode checking only works in --check mode */
 	if (mode != PG_MODE_CHECK && only_filenode)
 	{
-		pg_log_error("--filenode option only possible with --check");
+		pg_log_error("option -f/--filenode can only be used with --check");
 		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
 				progname);
 		exit(1);

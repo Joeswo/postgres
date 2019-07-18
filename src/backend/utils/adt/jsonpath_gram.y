@@ -416,18 +416,18 @@ makeItemList(List *list)
 {
 	JsonPathParseItem  *head,
 					   *end;
-	ListCell		   *cell = list_head(list);
+	ListCell		   *cell;
 
-	head = end = (JsonPathParseItem *) lfirst(cell);
+	head = end = (JsonPathParseItem *) linitial(list);
 
-	if (!lnext(cell))
+	if (list_length(list) == 1)
 		return head;
 
 	/* append items to the end of already existing list */
 	while (end->next)
 		end = end->next;
 
-	for_each_cell(cell, lnext(cell))
+	for_each_cell(cell, list, list_second_cell(list))
 	{
 		JsonPathParseItem *c = (JsonPathParseItem *) lfirst(cell);
 
@@ -509,6 +509,14 @@ makeItemLikeRegex(JsonPathParseItem *expr, JsonPathString *pattern,
 			case 'x':
 				v->value.like_regex.flags |= JSP_REGEX_WSPACE;
 				cflags |= REG_EXPANDED;
+				break;
+			case 'q':
+				v->value.like_regex.flags |= JSP_REGEX_QUOTE;
+				if (!(v->value.like_regex.flags & (JSP_REGEX_MLINE | JSP_REGEX_SLINE | JSP_REGEX_WSPACE)))
+				{
+					cflags &= ~REG_ADVANCED;
+					cflags |= REG_QUOTE;
+				}
 				break;
 			default:
 				ereport(ERROR,

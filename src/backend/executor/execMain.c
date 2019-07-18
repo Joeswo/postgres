@@ -2793,6 +2793,7 @@ EvalPlanQualStart(EPQState *epqstate, EState *parentestate, Plan *planTree)
 	estate->es_range_table_array = parentestate->es_range_table_array;
 	estate->es_range_table_size = parentestate->es_range_table_size;
 	estate->es_relations = parentestate->es_relations;
+	estate->es_queryEnv = parentestate->es_queryEnv;
 	estate->es_rowmarks = parentestate->es_rowmarks;
 	estate->es_plannedstmt = parentestate->es_plannedstmt;
 	estate->es_junkFilter = parentestate->es_junkFilter;
@@ -2876,8 +2877,9 @@ EvalPlanQualStart(EPQState *epqstate, EState *parentestate, Plan *planTree)
 
 	/*
 	 * Each EState must have its own es_epqScanDone state, but if we have
-	 * nested EPQ checks they should share es_epqTuple arrays.  This allows
-	 * sub-rechecks to inherit the values being examined by an outer recheck.
+	 * nested EPQ checks they should share es_epqTupleSlot arrays.  This
+	 * allows sub-rechecks to inherit the values being examined by an outer
+	 * recheck.
 	 */
 	estate->es_epqScanDone = (bool *) palloc0(rtsize * sizeof(bool));
 	if (parentestate->es_epqTupleSlot != NULL)

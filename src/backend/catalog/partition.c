@@ -275,7 +275,7 @@ has_partition_attrs(Relation rel, Bitmapset *attnums, bool *used_in_expr)
 
 			/* Find all attributes referenced */
 			pull_varattnos(expr, 1, &expr_attrs);
-			partexprs_item = lnext(partexprs_item);
+			partexprs_item = lnext(partexprs, partexprs_item);
 
 			if (bms_overlap(attnums, expr_attrs))
 			{
@@ -319,7 +319,7 @@ get_default_partition_oid(Oid parentId)
 /*
  * update_default_partition_oid
  *
- * Update pg_partition_table.partdefid with a new default partition OID.
+ * Update pg_partitioned_table.partdefid with a new default partition OID.
  */
 void
 update_default_partition_oid(Oid parentId, Oid defaultPartId)

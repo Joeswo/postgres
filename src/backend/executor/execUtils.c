@@ -588,7 +588,7 @@ tlist_matches_tupdesc(PlanState *ps, List *tlist, Index varno, TupleDesc tupdesc
 			 var->vartypmod != -1))
 			return false;		/* type mismatch */
 
-		tlist_item = lnext(tlist_item);
+		tlist_item = lnext(tlist, tlist_item);
 	}
 
 	if (tlist_item)
@@ -642,7 +642,7 @@ ExecAssignScanType(ScanState *scanstate, TupleDesc tupDesc)
 }
 
 /* ----------------
- *		ExecCreateSlotFromOuterPlan
+ *		ExecCreateScanSlotFromOuterPlan
  * ----------------
  */
 void

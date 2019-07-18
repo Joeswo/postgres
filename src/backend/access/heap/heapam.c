@@ -3991,6 +3991,7 @@ heap_lock_tuple(Relation relation, HeapTuple tuple,
 				new_infomask,
 				new_infomask2;
 	bool		first_time = true;
+	bool		skip_tuple_lock = false;
 	bool		have_tuple_lock = false;
 	bool		cleared_all_frozen = false;
 
@@ -4038,7 +4039,6 @@ l3:
 		uint16		infomask;
 		uint16		infomask2;
 		bool		require_sleep;
-		bool		skip_tuple_lock;
 		ItemPointerData t_ctid;
 
 		/* must copy state data before unlocking buffer */
@@ -4064,7 +4064,6 @@ l3:
 		if (first_time)
 		{
 			first_time = false;
-			skip_tuple_lock = false;
 
 			if (infomask & HEAP_XMAX_IS_MULTI)
 			{

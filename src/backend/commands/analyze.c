@@ -455,7 +455,8 @@ do_analyze_rel(Relation onerel, VacuumParams *params,
 						if (indexpr_item == NULL)	/* shouldn't happen */
 							elog(ERROR, "too few entries in indexprs list");
 						indexkey = (Node *) lfirst(indexpr_item);
-						indexpr_item = lnext(indexpr_item);
+						indexpr_item = lnext(indexInfo->ii_Expressions,
+											 indexpr_item);
 						thisdata->vacattrstats[tcnt] =
 							examine_attribute(Irel[ind], i + 1, indexkey);
 						if (thisdata->vacattrstats[tcnt] != NULL)
@@ -1048,13 +1049,13 @@ acquire_sample_rows(Relation onerel, int elevel,
 			 * The first targrows sample rows are simply copied into the
 			 * reservoir. Then we start replacing tuples in the sample until
 			 * we reach the end of the relation.  This algorithm is from Jeff
-			 * Vitter's paper (see full citation below). It works by
-			 * repeatedly computing the number of tuples to skip before
-			 * selecting a tuple, which replaces a randomly chosen element of
-			 * the reservoir (current set of tuples).  At all times the
-			 * reservoir is a true random sample of the tuples we've passed
-			 * over so far, so when we fall off the end of the relation we're
-			 * done.
+			 * Vitter's paper (see full citation in utils/misc/sampling.c). It
+			 * works by repeatedly computing the number of tuples to skip
+			 * before selecting a tuple, which replaces a randomly chosen
+			 * element of the reservoir (current set of tuples).  At all times
+			 * the reservoir is a true random sample of the tuples we've
+			 * passed over so far, so when we fall off the end of the relation
+			 * we're done.
 			 */
 			if (numrows < targrows)
 				rows[numrows++] = ExecCopySlotHeapTuple(slot);

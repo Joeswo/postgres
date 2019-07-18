@@ -3124,6 +3124,14 @@ remove_useless_groupby_columns(PlannerInfo *root)
 		if (rte->rtekind != RTE_RELATION)
 			continue;
 
+		/*
+		 * We must skip inheritance parent tables as some of the child rels
+		 * may cause duplicate rows.  This cannot happen with partitioned
+		 * tables, however.
+		 */
+		if (rte->inh && rte->relkind != RELKIND_PARTITIONED_TABLE)
+			continue;
+
 		/* Nothing to do unless this rel has multiple Vars in GROUP BY */
 		relattnos = groupbyattnos[relid];
 		if (bms_membership(relattnos) != BMS_MULTIPLE)
@@ -3343,7 +3351,7 @@ extract_rollup_sets(List *groupingSets)
 	while (lc1 && lfirst(lc1) == NIL)
 	{
 		++num_empty;
-		lc1 = lnext(lc1);
+		lc1 = lnext(groupingSets, lc1);
 	}
 
 	/* bail out now if it turns out that all we had were empty sets. */
@@ -3377,7 +3385,7 @@ extract_rollup_sets(List *groupingSets)
 	j = 0;
 	i = 1;
 
-	for_each_cell(lc, lc1)
+	for_each_cell(lc, groupingSets, lc1)
 	{
 		List	   *candidate = (List *) lfirst(lc);
 		Bitmapset  *candidate_set = NULL;
@@ -3530,7 +3538,6 @@ static List *
 reorder_grouping_sets(List *groupingsets, List *sortclause)
 {
 	ListCell   *lc;
-	ListCell   *lc2;
 	List	   *previous = NIL;
 	List	   *result = NIL;
 
@@ -3540,35 +3547,33 @@ reorder_grouping_sets(List *groupingsets, List *sortclause)
 		List	   *new_elems = list_difference_int(candidate, previous);
 		GroupingSetData *gs = makeNode(GroupingSetData);
 
-		if (list_length(new_elems) > 0)
+		while (list_length(sortclause) > list_length(previous) &&
+			   list_length(new_elems) > 0)
 		{
-			while (list_length(sortclause) > list_length(previous))
-			{
-				SortGroupClause *sc = list_nth(sortclause, list_length(previous));
-				int			ref = sc->tleSortGroupRef;
+			SortGroupClause *sc = list_nth(sortclause, list_length(previous));
+			int			ref = sc->tleSortGroupRef;
 
-				if (list_member_int(new_elems, ref))
-				{
-					previous = lappend_int(previous, ref);
-					new_elems = list_delete_int(new_elems, ref);
-				}
-				else
-				{
-					/* diverged from the sortclause; give up on it */
-					sortclause = NIL;
-					break;
-				}
+			if (list_member_int(new_elems, ref))
+			{
+				previous = lappend_int(previous, ref);
+				new_elems = list_delete_int(new_elems, ref);
 			}
-
-			foreach(lc2, new_elems)
+			else
 			{
-				previous = lappend_int(previous, lfirst_int(lc2));
+				/* diverged from the sortclause; give up on it */
+				sortclause = NIL;
+				break;
 			}
 		}
 
+		/*
+		 * Safe to use list_concat (which shares cells of the second arg)
+		 * because we know that new_elems does not share cells with anything.
+		 */
+		previous = list_concat(previous, new_elems);
+
 		gs->set = list_copy(previous);
 		result = lcons(gs, result);
-		list_free(new_elems);
 	}
 
 	list_free(previous);
@@ -4238,7 +4243,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 		{
 			unhashed_rollup = lfirst_node(RollupData, l_start);
 			exclude_groups = unhashed_rollup->numGroups;
-			l_start = lnext(l_start);
+			l_start = lnext(gd->rollups, l_start);
 		}
 
 		hashsize = estimate_hashagg_tablesize(path,
@@ -4259,7 +4264,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 		 */
 		sets_data = list_copy(gd->unsortable_sets);
 
-		for_each_cell(lc, l_start)
+		for_each_cell(lc, gd->rollups, l_start)
 		{
 			RollupData *rollup = lfirst_node(RollupData, lc);
 
@@ -4420,7 +4425,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 			 * below, must use the same condition.
 			 */
 			i = 0;
-			for_each_cell(lc, lnext(list_head(gd->rollups)))
+			for_each_cell(lc, gd->rollups, list_second_cell(gd->rollups))
 			{
 				RollupData *rollup = lfirst_node(RollupData, lc);
 
@@ -4454,7 +4459,7 @@ consider_groupingsets_paths(PlannerInfo *root,
 				rollups = list_make1(linitial(gd->rollups));
 
 				i = 0;
-				for_each_cell(lc, lnext(list_head(gd->rollups)))
+				for_each_cell(lc, gd->rollups, list_second_cell(gd->rollups))
 				{
 					RollupData *rollup = lfirst_node(RollupData, lc);
 
@@ -4667,7 +4672,7 @@ create_one_window_path(PlannerInfo *root,
 											 -1.0);
 		}
 
-		if (lnext(l))
+		if (lnext(activeWindows, l))
 		{
 			/*
 			 * Add the current WindowFuncs to the output target for this
@@ -5328,7 +5333,7 @@ postprocess_setop_tlist(List *new_tlist, List *orig_tlist)
 
 		Assert(orig_tlist_item != NULL);
 		orig_tle = lfirst_node(TargetEntry, orig_tlist_item);
-		orig_tlist_item = lnext(orig_tlist_item);
+		orig_tlist_item = lnext(orig_tlist, orig_tlist_item);
 		if (orig_tle->resjunk)	/* should not happen */
 			elog(ERROR, "resjunk output columns are not implemented");
 		Assert(new_tle->resno == orig_tle->resno);

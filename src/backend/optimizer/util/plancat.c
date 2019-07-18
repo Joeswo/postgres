@@ -419,6 +419,13 @@ get_relation_info(PlannerInfo *root, Oid relationObjectId, bool inhparent,
 
 			index_close(indexRelation, NoLock);
 
+			/*
+			 * We've historically used lcons() here.  It'd make more sense to
+			 * use lappend(), but that causes the planner to change behavior
+			 * in cases where two indexes seem equally attractive.  For now,
+			 * stick with lcons() --- few tables should have so many indexes
+			 * that the O(N^2) behavior of lcons() is really a problem.
+			 */
 			indexinfos = lcons(info, indexinfos);
 		}
 
@@ -1308,6 +1315,7 @@ get_relation_statistics(RelOptInfo *rel, Relation relation)
 		Oid			statOid = lfirst_oid(l);
 		Form_pg_statistic_ext staForm;
 		HeapTuple	htup;
+		HeapTuple	dtup;
 		Bitmapset  *keys = NULL;
 		int			i;
 
@@ -1315,6 +1323,10 @@ get_relation_statistics(RelOptInfo *rel, Relation relation)
 		if (!HeapTupleIsValid(htup))
 			elog(ERROR, "cache lookup failed for statistics object %u", statOid);
 		staForm = (Form_pg_statistic_ext) GETSTRUCT(htup);
+
+		dtup = SearchSysCache1(STATEXTDATASTXOID, ObjectIdGetDatum(statOid));
+		if (!HeapTupleIsValid(dtup))
+			elog(ERROR, "cache lookup failed for statistics object %u", statOid);
 
 		/*
 		 * First, build the array of columns covered.  This is ultimately
@@ -1325,7 +1337,7 @@ get_relation_statistics(RelOptInfo *rel, Relation relation)
 			keys = bms_add_member(keys, staForm->stxkeys.values[i]);
 
 		/* add one StatisticExtInfo for each kind built */
-		if (statext_is_kind_built(htup, STATS_EXT_NDISTINCT))
+		if (statext_is_kind_built(dtup, STATS_EXT_NDISTINCT))
 		{
 			StatisticExtInfo *info = makeNode(StatisticExtInfo);
 
@@ -1334,10 +1346,10 @@ get_relation_statistics(RelOptInfo *rel, Relation relation)
 			info->kind = STATS_EXT_NDISTINCT;
 			info->keys = bms_copy(keys);
 
-			stainfos = lcons(info, stainfos);
+			stainfos = lappend(stainfos, info);
 		}
 
-		if (statext_is_kind_built(htup, STATS_EXT_DEPENDENCIES))
+		if (statext_is_kind_built(dtup, STATS_EXT_DEPENDENCIES))
 		{
 			StatisticExtInfo *info = makeNode(StatisticExtInfo);
 
@@ -1346,10 +1358,10 @@ get_relation_statistics(RelOptInfo *rel, Relation relation)
 			info->kind = STATS_EXT_DEPENDENCIES;
 			info->keys = bms_copy(keys);
 
-			stainfos = lcons(info, stainfos);
+			stainfos = lappend(stainfos, info);
 		}
 
-		if (statext_is_kind_built(htup, STATS_EXT_MCV))
+		if (statext_is_kind_built(dtup, STATS_EXT_MCV))
 		{
 			StatisticExtInfo *info = makeNode(StatisticExtInfo);
 
@@ -1358,10 +1370,11 @@ get_relation_statistics(RelOptInfo *rel, Relation relation)
 			info->kind = STATS_EXT_MCV;
 			info->keys = bms_copy(keys);
 
-			stainfos = lcons(info, stainfos);
+			stainfos = lappend(stainfos, info);
 		}
 
 		ReleaseSysCache(htup);
+		ReleaseSysCache(dtup);
 		bms_free(keys);
 	}
 
@@ -1736,7 +1749,7 @@ build_index_tlist(PlannerInfo *root, IndexOptInfo *index,
 			if (indexpr_item == NULL)
 				elog(ERROR, "wrong number of index expressions");
 			indexvar = (Expr *) lfirst(indexpr_item);
-			indexpr_item = lnext(indexpr_item);
+			indexpr_item = lnext(index->indexprs, indexpr_item);
 		}
 
 		tlist = lappend(tlist,
@@ -2295,7 +2308,7 @@ set_baserel_partition_key_exprs(Relation relation,
 			/* Re-stamp the expression with given varno. */
 			partexpr = (Expr *) copyObject(lfirst(lc));
 			ChangeVarNodes((Node *) partexpr, 1, varno, 0);
-			lc = lnext(lc);
+			lc = lnext(partkey->partexprs, lc);
 		}
 
 		partexprs[cnt] = list_make1(partexpr);

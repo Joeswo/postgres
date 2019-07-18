@@ -146,6 +146,7 @@ typedef struct JsonValueList
 typedef struct JsonValueListIterator
 {
 	JsonbValue *value;
+	List	   *list;
 	ListCell   *next;
 } JsonValueListIterator;
 
@@ -1664,6 +1665,17 @@ executeLikeRegex(JsonPathItem *jsp, JsonbValue *str, JsonbValue *rarg,
 			cxt->cflags &= ~REG_NEWLINE;
 		if (flags & JSP_REGEX_WSPACE)
 			cxt->cflags |= REG_EXPANDED;
+
+		/*
+		 * 'q' flag can work together only with 'i'.  When other is specified,
+		 * then 'q' has no effect.
+		 */
+		if ((flags & JSP_REGEX_QUOTE) &&
+			!(flags & (JSP_REGEX_MLINE | JSP_REGEX_SLINE | JSP_REGEX_WSPACE)))
+		{
+			cxt->cflags &= ~REG_ADVANCED;
+			cxt->cflags |= REG_QUOTE;
+		}
 	}
 
 	if (RE_compile_and_execute(cxt->regex, str->val.string.val,
@@ -2171,16 +2183,19 @@ JsonValueListInitIterator(const JsonValueList *jvl, JsonValueListIterator *it)
 	if (jvl->singleton)
 	{
 		it->value = jvl->singleton;
+		it->list = NIL;
 		it->next = NULL;
 	}
-	else if (list_head(jvl->list) != NULL)
+	else if (jvl->list != NIL)
 	{
 		it->value = (JsonbValue *) linitial(jvl->list);
-		it->next = lnext(list_head(jvl->list));
+		it->list = jvl->list;
+		it->next = list_second_cell(jvl->list);
 	}
 	else
 	{
 		it->value = NULL;
+		it->list = NIL;
 		it->next = NULL;
 	}
 }
@@ -2196,7 +2211,7 @@ JsonValueListNext(const JsonValueList *jvl, JsonValueListIterator *it)
 	if (it->next)
 	{
 		it->value = lfirst(it->next);
-		it->next = lnext(it->next);
+		it->next = lnext(it->list, it->next);
 	}
 	else
 	{

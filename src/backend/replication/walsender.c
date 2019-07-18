@@ -522,7 +522,7 @@ SendTimeLineHistory(TimeLineHistoryCmd *cmd)
 		bytesleft -= nread;
 	}
 
-	if (CloseTransientFile(fd))
+	if (CloseTransientFile(fd) != 0)
 		ereport(ERROR,
 				(errcode_for_file_access(),
 				 errmsg("could not close file \"%s\": %m", path)));
@@ -1087,7 +1087,8 @@ StartLogicalReplication(StartReplicationCmd *cmd)
 	 * Create our decoding context, making it start at the previously ack'ed
 	 * position.
 	 *
-	 * Do this before sending CopyBoth, so that any errors are reported early.
+	 * Do this before sending a CopyBothResponse message, so that any errors
+	 * are reported early.
 	 */
 	logical_decoding_ctx =
 		CreateDecodingContext(cmd->startpoint, cmd->options, false,
